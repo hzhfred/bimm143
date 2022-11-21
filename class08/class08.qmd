@@ -1,0 +1,275 @@
+---
+title: "class08"
+format: html
+author: Ziheng Huang
+---
+
+# 1. Exploratory data analysis
+
+Preparing data:
+
+```{r}
+fna.data <- "WisconsinCancer.csv"
+wisc.df <- read.csv(fna.data, row.names=1)
+wisc.data <- wisc.df[,-1]
+diagnosis <- wisc.df$diagnosis 
+diagnosis <- as.factor(diagnosis)
+```
+
+Explore data:
+
+Q1. How many observations are in this dataset? 569
+
+```{r}
+dim(wisc.data)
+```
+
+Q2. How many of the observations have a malignant diagnosis? 212
+
+```{r}
+table(diagnosis)
+sum(diagnosis == 'M')
+```
+
+Q3. How many variables/features in the data are suffixed with `_mean`? 10
+
+```{r}
+length(grep('_mean',colnames(wisc.data)))
+```
+
+# 2. Principal Component Analysis
+
+## Performing PCA
+
+```{r}
+colMeans(wisc.data)
+apply(wisc.data,2,sd)
+```
+
+```{r}
+wisc.pr <- prcomp( (wisc.data), scale=TRUE )
+summary(wisc.pr)
+```
+
+Q4. From your results, what proportion of the original variance is captured by the first principal components (PC1)?
+
+    0.4427
+
+Q5. How many principal components (PCs) are required to describe at least 70% of the original variance in the data?
+
+    first 3 PCs explains 0.72636
+
+Q6. How many principal components (PCs) are required to describe at least 90% of the original variance in the data?
+
+    first 7 PCs explains 0.91010
+
+## Interpreting PCA results
+
+```{r}
+biplot(wisc.pr)
+```
+
+Q7. What stands out to you about this plot? Is it easy or difficult to understand? Why?
+
+It's a mess. very hard to see.
+
+Plot: PC1 vs PC2
+
+```{r}
+plot( wisc.pr$x[,1], wisc.pr$x[,2] , col =diagnosis , xlab = "PC1", ylab = "PC2")
+```
+
+Plot: PC1 vs PC3
+
+```{r}
+plot( wisc.pr$x[,1], wisc.pr$x[,3] , col = diagnosis , xlab = "PC1", ylab = "PC3")
+```
+
+Q8. Generate a similar plot for principal components 1 and 3. What do you notice about these plots?
+
+There is pattern in the data that splits the patients.
+
+GGPLOT:
+
+```{r}
+df <- as.data.frame(wisc.pr$x)
+df$diagnosis <- diagnosis
+
+library(ggplot2)
+
+ggplot(df) + 
+  aes(PC1, PC2, col=df$diagnosis) + 
+  geom_point()
+```
+
+## Variance explained
+
+```{r}
+library(factoextra)
+fviz_eig(wisc.pr, addlabels = TRUE)
+```
+
+Q9. For the first principal component, what is the component of the loading vector
+
+```{r}
+wisc.pr$rotation['concave.points_mean',1]
+```
+
+Q10. What is the minimum number of principal components required to explain 80% of the variance of the data?
+
+You need the first 5 PCs at least to explain 80% of the variance.
+
+```{r}
+44.3 + 19 + 9.4 + 6.6 + 5.5
+```
+
+# 3. Hierarchical clustering
+
+set up clustering
+
+```{r}
+data.scaled <- scale(wisc.data)
+data.dist <- dist(data.scaled)
+wisc.hclust <- hclust(data.dist)
+```
+
+## Results of hierarchical clustering
+
+Q11. Using the plot() and abline() functions, what is the height at which the clustering model has 4 clusters? 19.5 lead to 4 clusters
+
+```{r}
+plot(wisc.hclust)
+abline(h=19.5, col="red", lty=2)
+```
+
+## Selecting number of clusters
+
+```{r}
+wisc.hclust.clusters <- cutree(wisc.hclust, k=4)
+table(wisc.hclust.clusters, diagnosis)
+```
+
+Q12. Can you find a better cluster vs diagnoses match by cutting into a different number of clusters between 2 and 10?
+
+The below is the result for 3 and 5 clusters. I also tried 6,7,8,9. I didn't see the result being improved a lot.
+
+```{r}
+wisc.hclust.clusters <- cutree(wisc.hclust, k=3)
+table(wisc.hclust.clusters, diagnosis)
+```
+
+```{r}
+wisc.hclust.clusters <- cutree(wisc.hclust, k=5)
+table(wisc.hclust.clusters, diagnosis)
+```
+
+```{r}
+wisc.hclust.clusters <- cutree(wisc.hclust, k=4)
+table(wisc.hclust.clusters, diagnosis)
+```
+
+## Using different methods
+
+Q13. Which method gives your favorite results for the same data.dist dataset? Explain your reasoning.
+
+I like the ward.D2 the most since it gave a much cleaner split for 2 clusters.
+
+```{r}
+plot(hclust(data.dist,method="ward.D2"))
+
+```
+
+# 5. Combining methods
+
+## Clustering on PCA results
+
+set up hclust with the first 7 PCs (explains \> 90% of variability):
+
+```{r}
+
+wisc.pr.hclust <- hclust(dist(wisc.pr$x[,1:7]),method="ward.D2")
+
+```
+
+hclust visualization:
+
+```{r}
+plot(wisc.pr.hclust)
+```
+
+hclust clusters:
+
+```{r}
+
+wisc.pr.hclust.clusters <- cutree(wisc.pr.hclust, k=2)
+grps <- wisc.pr.hclust.clusters
+table(grps, diagnosis)
+
+```
+
+Using clusters from hclust to plot the graph:
+
+```{r}
+g <- as.factor(grps)
+#levels(g)
+g <- relevel(g,2)
+#levels(g)
+plot(wisc.pr$x[,1:2], col=g)
+
+```
+
+Q15. How well does the newly created model with four clusters separate out the two diagnoses?
+
+cut to 4 clusters:
+
+```{r}
+table(cutree(wisc.pr.hclust, k=4), diagnosis)
+```
+
+Cut with 2 clusters
+
+```{r}
+table(grps, diagnosis)
+```
+
+I think the new model cut with 4 clusters is worse in separating the diagnosis as shown in above 2 cells.
+
+Q16. How well do the k-means and hierarchical clustering models you created in previous sections (i.e. before PCA) do in terms of separating the diagnoses? Again, use the table() function to compare the output of each model (wisc.km\$cluster and wisc.hclust.clusters) with the vector containing the actual diagnoses.
+
+actual diagnosis:
+
+```{r}
+table(diagnosis)
+```
+
+Hierarchical:
+
+```{r}
+table(wisc.hclust.clusters, diagnosis)
+```
+
+clustering with PCA:
+
+```{r}
+table(grps, diagnosis)
+```
+
+Clustering with PCA yielded the best separation in tw0 clusters. using hierachical clustering directly on pre-PCA data had a hard time separating two clusters.
+
+Q17. Which of your analysis procedures resulted in a clustering model with the best specificity? How about sensitivity?
+
+Calculations are made base on above 3 tables. For Hierarchical clustering, 2 cluster failed to separate the diagnosis, so 4 is used. Among the 4 clusters, cluster 1(B:12,M:165) is M, cluster 3(B:343,M:40) is B while the other two clusters are seen as outliers. For clustering with PCA, cluster 1(B:28,M:188) is M, cluster 2(B:329,M:24) is B.
+
+specificity:
+
+Hierarchical: (343+40)/357 = 1.072829
+
+clustering with PCA: (329+24)/357 = 0.9887955
+
+sensitivity:
+
+Hierarchical: (12+165)/212 = 0.8349057
+
+clustering with PCA: (28+188)/212 = 1.018868
+
+compared to Hierarchical cluster, clustering with PCA has lower specificity and higher sensitivity

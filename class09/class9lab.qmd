@@ -1,0 +1,219 @@
+---
+title: "class09"
+author: "Ziheng Huang"
+format: html
+---
+
+# 1: Introduction to the RCSB Protein Data Bank (PDB)
+
+```{r}
+PDBSummary <- "PDBSummary.csv"
+PDBSummary <- read.csv("PDBSummary.csv", row.names=1)
+PDBSummary
+```
+
+Q1: What percentage of structures in the PDB are solved by X-Ray and Electron Microscopy ?
+
+X-ray:
+
+    86.28665
+
+EM:
+
+    6.522546
+
+X-ray + EM:
+
+    92.80919
+
+```{r}
+#total
+tot <- sum(as.numeric(sub(',','',PDBSummary$Total)))
+# X-ray
+XR = 100*sum(as.numeric(sub(',','',PDBSummary$X.ray)))/tot
+XR
+# EM:
+EM = 100*sum(as.numeric(sub(',','',PDBSummary$EM)))/tot
+EM
+# X-ray + EM 
+XR + EM
+```
+
+Q2: What proportion of structures in the PDB are protein?
+
+    0.9784631
+
+```{r}
+Prot = (as.numeric(sub(',','',PDBSummary["Protein (only)",]$Total)) + as.numeric(sub(',','',PDBSummary["Protein/Oligosaccharide",]$Total)) + as.numeric(sub(',','',PDBSummary["Protein/NA",]$Total)))/tot
+Prot
+  
+```
+
+Q3: Type HIV in the PDB website search box on the home page and determine how many HIV-1 protease structures are in the current PDB?
+
+Query "HIV" matches 4707 structures
+
+# 2. Visualizing the HIV-1 protease structure
+
+## Using Mol\*
+
+![](1HSG.png)
+
+Q4: Water molecules normally have 3 atoms. Why do we see just one atom per water molecule in this structure?
+
+hydrogen are too small, so we only see oxygen
+
+Q5: There is a critical "conserved" water molecule in the binding site. Can you identify this water molecule? What residue number does this water molecule have ?
+
+H2O 308
+
+Q6: Generate and save a figure clearly showing the two distinct chains of HIV-protease along with the ligand. You might also consider showing the catalytic residues ASP 25 in each chain (we recommend "Ball & Stick" for these side-chains). Add this figure to your Quarto document.
+
+![](1HSG%20(1).png)
+
+# 3. Introduction to Bio3D in R
+
+load data
+
+```{r}
+library(bio3d)
+pdb <- read.pdb("1hsg")
+```
+
+```{r}
+pdb
+```
+
+Q7: How many amino acid residues are there in this pdb object? 198
+
+Q8: Name one of the two non-protein residues? MK1
+
+Q9: How many protein chains are in this structure? 2
+
+Atom records of a PDB file:
+
+```{r}
+head(pdb$atom)
+```
+
+# 4. Comparative structure analysis of Adenylate Kinase
+
+Q10. Which of the packages above is found only on BioConductor and not CRAN? msa
+
+Q11. Which of the above packages is not found on BioConductor or CRAN?: bio3d-view
+
+Q12. True or False? Functions from the devtools package can be used to install packages from GitHub and BitBucket? True
+
+## Search and retrieve ADK structures
+
+```{r}
+library(bio3d)
+aa <- get.seq("1ake_A")
+```
+
+```{r}
+aa
+```
+
+Q13. How many amino acids are in this sequence, i.e. how long is this sequence? 214
+
+```{r}
+# Blast or hmmer search 
+#b <- blast.pdb(aa)
+```
+
+```{r}
+# Plot a summary of search results
+#hits <- plot(b)
+```
+
+```{r}
+# List out some 'top hits'
+#(hits$pdb.id)
+```
+
+Use these for analysis:
+
+```{r}
+hits <- NULL
+hits$pdb.id <- c('1AKE_A','6S36_A','6RZE_A','3HPR_A','1E4V_A','5EJE_A','1E4Y_A','3X2S_A','6HAP_A','6HAM_A','4K46_A','3GMT_A','4PZL_A')
+```
+
+Download files
+
+```{r}
+files <- get.pdb(hits$pdb.id, path="pdbs", split=TRUE, gzip=TRUE)
+
+```
+
+## Align and superpose structures
+
+```{r}
+pdbs <- pdbaln(files, fit = TRUE)#, exefile="msa")
+```
+
+```{r}
+# Vector containing PDB codes for figure axis
+ids <- basename.pdb(pdbs$id)
+
+# Draw schematic alignment
+plot(pdbs, labels=ids)
+```
+
+## Principal component analysis
+
+```{r}
+# Perform PCA
+pc.xray <- pca(pdbs)
+plot(pc.xray)
+```
+
+```{r}
+# Calculate RMSD
+rd <- rmsd(pdbs)
+
+# Structure-based clustering
+hc.rd <- hclust(dist(rd))
+grps.rd <- cutree(hc.rd, k=3)
+
+plot(pc.xray, 1:2, col="grey50", bg=grps.rd, pch=21, cex=1)
+```
+
+# 5. Optional further visualization
+
+```{r}
+pc1 <- mktrj(pc.xray, pc=1, file="pc_1.pdb")
+
+```
+
+```{r}
+library(ggplot2)
+library(ggrepel)
+
+df <- data.frame(PC1=pc.xray$z[,1], 
+                 PC2=pc.xray$z[,2], 
+                 col=as.factor(grps.rd),
+                 ids=ids)
+
+p <- ggplot(df) + 
+  aes(PC1, PC2, col=col, label=ids) +
+  geom_point(size=2) +
+  geom_text_repel(max.overlaps = 20) +
+  theme(legend.position = "none")
+p
+```
+
+# 6. Normal mode analysis \[optional\]
+
+```{r}
+modes <- nma(pdbs)
+plot(modes, pdbs, col=grps.rd)
+
+
+```
+
+Q14. What do you note about this plot? Are the black and colored lines similar or different? Where do you think they differ most and why?
+
+black and colored look similar in shape but the colored lines have bigger magnitude. \
+\
+\
